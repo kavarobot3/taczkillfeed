@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[47,48)"
+license="MIT"
+[[mods]]
+modId="qis4c4"
+version="1.1.0"
+displayName="qis4c4"
+license="MIT"
+authors="qisumei,nimshade"
+description='''
+A mod that adds C4 explosive to Minecraft.
+Place and detonate remotely with a detonator.
+'''
+
+[[dependencies.qis4c4]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,48)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.qis4c4]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.20.2)"
+    ordering="NONE"
+    side="BOTH"

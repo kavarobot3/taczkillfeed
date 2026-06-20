@@ -5,6 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.List;
 import java.util.UUID;
@@ -60,27 +61,13 @@ public class KillfeedOverlay {
         String killer = entry.killerName != null ? entry.killerName : "?";
         String victim = entry.victimName != null ? entry.victimName : "?";
 
-        String streakText = "";
-        int streakColor = 0;
-        if (entry.killStreak >= 5) {
-            streakText = "ON FIRE";
-            streakColor = 0xFF8800;
-        } else if (entry.killStreak >= 2) {
-            streakText = entry.killStreak + "x";
-            streakColor = 0xFFD700;
-        }
-
         int killerWidth = font.width(killer);
-        int streakWidth = streakText.isEmpty() ? 0 : font.width(streakText);
         int victimWidth = font.width(victim);
         int iconSize = 16;
         int gap = 6;
         int smallGap = 2;
 
-        int hsIconWidth = 0;
-        if (entry.isHeadshot) {
-            hsIconWidth = 12;
-        }
+        int skullWidth = entry.isHeadshot ? iconSize : 0;
 
         String assistText = "";
         int assistWidth = 0;
@@ -90,9 +77,8 @@ public class KillfeedOverlay {
         }
 
         int totalWidth = killerWidth +
-                (streakWidth > 0 ? smallGap + streakWidth : 0) +
                 gap + iconSize + gap + victimWidth +
-                (hsIconWidth > 0 ? smallGap + hsIconWidth : 0);
+                (skullWidth > 0 ? smallGap + skullWidth : 0);
         int assistLineWidth = assistWidth > 0 ? assistWidth : 0;
         int maxWidth = Math.max(totalWidth, assistLineWidth);
 
@@ -131,16 +117,7 @@ public class KillfeedOverlay {
 
         int killerColor = (entry.killerColor & 0xFFFFFF) | alphaBits;
         guiGraphics.drawString(font, killer, currentX, textY, killerColor, false);
-        currentX += killerWidth;
-
-        if (!streakText.isEmpty()) {
-            currentX += smallGap;
-            int sc = (streakColor & 0xFFFFFF) | alphaBits;
-            guiGraphics.drawString(font, streakText, currentX, textY, sc, false);
-            currentX += streakWidth;
-        }
-
-        currentX += gap;
+        currentX += killerWidth + gap;
 
         if (!entry.gunStack.isEmpty()) {
             guiGraphics.renderFakeItem(entry.gunStack, currentX, y + 2);
@@ -149,8 +126,8 @@ public class KillfeedOverlay {
 
         if (entry.isHeadshot) {
             currentX += smallGap;
-            drawHeadshotIcon(guiGraphics, currentX, y + 6, alphaBits);
-            currentX += hsIconWidth;
+            guiGraphics.renderFakeItem(new ItemStack(Items.SKELETON_SKULL), currentX, y + 2);
+            currentX += skullWidth;
         }
 
         int victimColor = (entry.victimColor & 0xFFFFFF) | alphaBits;
@@ -163,27 +140,6 @@ public class KillfeedOverlay {
         }
     }
 
-    private static void drawHeadshotIcon(GuiGraphics guiGraphics, int x, int y, int alphaBits) {
-        int cx = x + 6;
-        int cy = y + 6;
-        int color = (0xFFD700 & 0xFFFFFF) | alphaBits;
-
-        guiGraphics.fill(cx - 5, cy - 1, cx + 5, cy + 0, color);
-        guiGraphics.fill(cx - 5, cy + 0, cx + 5, cy + 1, color);
-        guiGraphics.fill(cx - 1, cy - 5, cx + 0, cy + 5, color);
-        guiGraphics.fill(cx + 0, cy - 5, cx + 1, cy + 5, color);
-
-        guiGraphics.fill(cx - 5, cy - 5, cx - 4, cy - 4, color);
-        guiGraphics.fill(cx + 4, cy - 5, cx + 5, cy - 4, color);
-        guiGraphics.fill(cx - 5, cy + 4, cx - 4, cy + 5, color);
-        guiGraphics.fill(cx + 4, cy + 4, cx + 5, cy + 5, color);
-
-        guiGraphics.fill(cx - 5, cy - 5, cx - 4, cy + 5, color);
-        guiGraphics.fill(cx + 4, cy - 5, cx + 5, cy + 5, color);
-        guiGraphics.fill(cx - 5, cy - 5, cx + 5, cy - 4, color);
-        guiGraphics.fill(cx - 5, cy + 4, cx + 5, cy + 5, color);
-    }
-
     static class KillfeedEntry {
         final String killerName;
         final int killerColor;
@@ -193,7 +149,6 @@ public class KillfeedOverlay {
         final UUID killerUUID;
         final UUID victimUUID;
         final boolean isHeadshot;
-        final int killStreak;
         final String assistName;
         final int killType;
         final long spawnTime;
@@ -207,7 +162,6 @@ public class KillfeedOverlay {
             this.killerUUID = packet.getKillerUUID();
             this.victimUUID = packet.getVictimUUID();
             this.isHeadshot = packet.isHeadshot();
-            this.killStreak = packet.getKillStreak();
             this.assistName = packet.getAssistName();
             this.killType = packet.getKillType();
             this.spawnTime = System.currentTimeMillis();

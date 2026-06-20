@@ -12,6 +12,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -23,11 +24,43 @@ import java.util.*;
 
 @Mod.EventBusSubscriber(modid = TaczKillfeed.MOD_ID)
 public class KillHandler {
-    private static final Map<UUID, Integer> killStreaks = new HashMap<>();
     private static final Map<UUID, Map<UUID, Float>> damageTracker = new HashMap<>();
     private static final Map<UUID, Long> lastDamageTime = new HashMap<>();
     private static final long ASSIST_TIMEOUT_MS = 5000L;
-    private static final Set<UUID> gunProcessed = new HashSet<>();
+    private static final long PENDING_TIMEOUT_TICKS = 40L;
+
+    private static final Map<UUID, PendingDeath> pendingDeaths = new HashMap<>();
+
+    @SubscribeEvent
+    public static void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+        if (pendingDeaths.isEmpty()) return;
+
+        var it = pendingDeaths.entrySet().iterator();
+        while (it.hasNext()) {
+            var entry = it.next();
+            PendingDeath pd = entry.getValue();
+
+            if (pd.killer.level().getGameTime() - pd.tick < PENDING_TIMEOUT_TICKS) continue;
+
+            it.remove();
+
+            int killType = KillfeedPacket.TYPE_KNIFE;
+            if (pd.killer.level().getGameTime() - pd.tick < PENDING_TIMEOUT_TICKS) continue;
+            if (isKnife(pd.weapon)) {
+                killType = KillfeedPacket.TYPE_KNIFE;
+            }
+
+            KillfeedPacket packet = new KillfeedPacket(
+                    pd.killerName, pd.killerColor, pd.victimName, pd.victimColor,
+                    pd.weapon, pd.killerId, pd.victimId, false,
+                    pd.assistName, killType
+            );
+
+            TaczKillfeed.LOGGER.info("Killfeed: {} killed {} (type={})", pd.killerName, pd.victimName, killType);
+            sendPacket(packet, pd.killer);
+        }
+    }
 
     @SubscribeEvent
     public static void onLivingHurt(LivingHurtEvent event) {
@@ -53,27 +86,7 @@ public class KillHandler {
         UUID vid = victim.getUUID();
         UUID kid = killer.getUUID();
 
-        if (gunProcessed.contains(vid)) {
-            gunProcessed.remove(vid);
-            cleanStreakOnDeath(victim);
-            return;
-        }
-
-        int streak = killStreaks.merge(kid, 1, (old, one) -> old + 1);
-        cleanStreakOnDeath(victim);
-
         String assistName = findAssist(vid, kid);
-
-        int killType = KillfeedPacket.TYPE_KNIFE;
-        ItemStack weapon = killer.getMainHandItem();
-
-        if (event.getSource().is(DamageTypes.EXPLOSION) || event.getSource().is(DamageTypes.PLAYER_EXPLOSION)) {
-            killType = KillfeedPacket.TYPE_GRENADE;
-        } else if (isKnife(weapon)) {
-            killType = KillfeedPacket.TYPE_KNIFE;
-        } else {
-            killType = KillfeedPacket.TYPE_KNIFE;
-        }
 
         int killerColor = getTeamColor(killer);
         int victimColor = getTeamColor(victim);
@@ -83,14 +96,11 @@ public class KillHandler {
         if (killerName.length() > 100) killerName = killerName.substring(0, 100);
         if (victimName.length() > 100) victimName = victimName.substring(0, 100);
 
-        KillfeedPacket packet = new KillfeedPacket(
-                killerName, killerColor, victimName, victimColor,
-                weapon, kid, vid, false,
-                streak, assistName, killType
-        );
-
-        TaczKillfeed.LOGGER.info("Killfeed: {} killed {} (streak={}, type={})", killerName, victimName, streak, killType);
-        sendPacket(packet, killer);
+        pendingDeaths.put(vid, new PendingDeath(
+                killer, victim, vid, kid, killerName, victimName,
+                killerColor, victimColor, assistName, killer.getMainHandItem().copy(),
+                killer.level().getGameTime()
+        ));
     }
 
     @SubscribeEvent
@@ -102,13 +112,9 @@ public class KillHandler {
 
         UUID vid = victim.getUUID();
         UUID kid = attacker.getUUID();
-        gunProcessed.add(vid);
-        if (gunProcessed.size() > 200) gunProcessed.clear();
 
-        int streak = killStreaks.merge(kid, 1, (old, one) -> old + 1);
-        cleanStreakOnDeath(victim);
-
-        String assistName = findAssist(vid, kid);
+        PendingDeath pd = pendingDeaths.remove(vid);
+        if (pd == null) return;
 
         boolean isHeadshot = event.isHeadShot();
         ResourceLocation gunId = event.getGunId();
@@ -124,28 +130,14 @@ public class KillHandler {
             if (gunItem != null && gunItem != Items.AIR) gunStack = new ItemStack(gunItem);
         }
 
-        int killerColor = getTeamColor(attacker);
-        int victimColor = getTeamColor(victim);
-
-        String killerName = attacker.getDisplayName().getString();
-        String victimName = victim.getDisplayName().getString();
-        if (killerName.length() > 100) killerName = killerName.substring(0, 100);
-        if (victimName.length() > 100) victimName = victimName.substring(0, 100);
-
         KillfeedPacket packet = new KillfeedPacket(
-                killerName, killerColor, victimName, victimColor,
+                pd.killerName, pd.killerColor, pd.victimName, pd.victimColor,
                 gunStack, kid, vid, isHeadshot,
-                streak, assistName, KillfeedPacket.TYPE_GUN
+                pd.assistName, KillfeedPacket.TYPE_GUN
         );
 
-        TaczKillfeed.LOGGER.info("Killfeed: {} killed {} (streak={})", killerName, victimName, streak);
-        sendPacket(packet, event.getAttacker());
-    }
-
-    private static void cleanStreakOnDeath(LivingEntity victim) {
-        killStreaks.remove(victim.getUUID());
-        damageTracker.remove(victim.getUUID());
-        lastDamageTime.remove(victim.getUUID());
+        TaczKillfeed.LOGGER.info("Killfeed: {} killed {} (headshot={})", pd.killerName, pd.victimName, isHeadshot);
+        sendPacket(packet, attacker);
     }
 
     private static String findAssist(UUID victimId, UUID killerId) {
@@ -197,4 +189,13 @@ public class KillHandler {
         }
         return 0xCCCCCC;
     }
+
+    private record PendingDeath(
+            Player killer, Player victim,
+            UUID victimId, UUID killerId,
+            String killerName, String victimName,
+            int killerColor, int victimColor,
+            String assistName, ItemStack weapon,
+            long tick
+    ) {}
 }

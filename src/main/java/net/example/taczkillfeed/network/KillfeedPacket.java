@@ -23,13 +23,12 @@ public class KillfeedPacket {
     private final UUID killerUUID;
     private final UUID victimUUID;
     private final boolean isHeadshot;
-    private final int killStreak;
     private final String assistName;
     private final int killType;
 
     public KillfeedPacket(String killerName, int killerColor, String victimName, int victimColor,
                           ItemStack gunStack, UUID killerUUID, UUID victimUUID, boolean isHeadshot,
-                          int killStreak, String assistName, int killType) {
+                          String assistName, int killType) {
         this.killerName = killerName != null ? killerName : "?";
         this.killerColor = killerColor;
         this.victimName = victimName != null ? victimName : "?";
@@ -38,7 +37,6 @@ public class KillfeedPacket {
         this.killerUUID = killerUUID != null ? killerUUID : new UUID(0, 0);
         this.victimUUID = victimUUID != null ? victimUUID : new UUID(0, 0);
         this.isHeadshot = isHeadshot;
-        this.killStreak = killStreak;
         this.assistName = assistName != null ? assistName : "";
         this.killType = killType;
     }
@@ -52,7 +50,6 @@ public class KillfeedPacket {
         buf.writeUUID(msg.killerUUID);
         buf.writeUUID(msg.victimUUID);
         buf.writeBoolean(msg.isHeadshot);
-        buf.writeInt(msg.killStreak);
         buf.writeUtf(msg.assistName);
         buf.writeInt(msg.killType);
     }
@@ -66,10 +63,9 @@ public class KillfeedPacket {
         UUID killerUUID = buf.readUUID();
         UUID victimUUID = buf.readUUID();
         boolean isHeadshot = buf.readBoolean();
-        int killStreak = buf.readInt();
         String assistName = buf.readUtf();
         int killType = buf.readInt();
-        return new KillfeedPacket(killer, kColor, victim, vColor, gunStack, killerUUID, victimUUID, isHeadshot, killStreak, assistName, killType);
+        return new KillfeedPacket(killer, kColor, victim, vColor, gunStack, killerUUID, victimUUID, isHeadshot, assistName, killType);
     }
 
     public static void handle(KillfeedPacket msg, Supplier<NetworkEvent.Context> ctx) {
@@ -89,7 +85,6 @@ public class KillfeedPacket {
     public UUID getKillerUUID() { return killerUUID; }
     public UUID getVictimUUID() { return victimUUID; }
     public boolean isHeadshot() { return isHeadshot; }
-    public int getKillStreak() { return killStreak; }
     public String getAssistName() { return assistName; }
     public int getKillType() { return killType; }
 }

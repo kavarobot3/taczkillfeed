@@ -4,7 +4,7 @@ license="MIT"
 
 [[mods]]
 modId="tacz_killfeed"
-version="1.0.0"
+version="1.1.0"
 displayName="TaCZ Killfeed"
 credits="Created for TaCZ integration"
 authors="Java Developer"
@@ -27,8 +27,8 @@ Counter-Strike style killfeed overlay in the top-right corner of your screen, in
     side="BOTH"
     
 [[dependencies.tacz_killfeed]]
-    modId="tacz_killfeed"
-    mandatory=false
+    modId="tacz"
+    mandatory=true
     versionRange="[1.0.0,)"
     ordering="NONE"
     side="BOTH"
